@@ -1,15 +1,30 @@
 import UIKit
 
-public final class GenericViewController<Item, Cell: UITableViewCell>: UITableViewController {
+public struct CellDescriptor {
+    public let configure: (UITableViewCell) -> ()
+    public let reuseIdentifier: String
+    public let cellType: UITableViewCell.Type
+
+    public init<Cell: UITableViewCell>(reuseIdentifier: String, configure: @escaping (Cell) -> ()) {
+        self.reuseIdentifier = reuseIdentifier
+        self.cellType = Cell.self
+        self.configure = { cell in
+            configure(cell as! Cell)
+        }
+    }
+}
+
+public final class GenericViewController<Item>: UITableViewController {
 
     private let items: [Item]
-    private let reuseIdentifier = "cell"
-    private let configure: (Cell, Item) -> ()
+    private let cellDescriptor: (Item) -> CellDescriptor
+    private var reuseIdentifiers = Set<String>()
+
     public var didSelect: (Item) -> () = { _ in }
 
-    public init(items: [Item], configure: @escaping (Cell, Item) -> ()) {
+    public init(items: [Item], cellDescriptor: @escaping (Item) -> CellDescriptor) {
         self.items = items
-        self.configure = configure
+        self.cellDescriptor = cellDescriptor
         super.init(style: .plain)
     }
 
@@ -17,19 +32,21 @@ public final class GenericViewController<Item, Cell: UITableViewCell>: UITableVi
         fatalError("init(coder:) has not been implemented")
     }
 
-    public override func viewDidLoad() {
-        super.viewDidLoad()
-        tableView.register(Cell.self, forCellReuseIdentifier: reuseIdentifier)
-    }
-
     public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         return items.count
     }
 
     public override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: reuseIdentifier, for: indexPath) as! Cell
         let item = items[indexPath.row]
-        configure(cell, item)
+        let descriptor = cellDescriptor(item)
+
+        if !reuseIdentifiers.contains(descriptor.reuseIdentifier) {
+            tableView.register(descriptor.cellType, forCellReuseIdentifier: descriptor.reuseIdentifier)
+            reuseIdentifiers.insert(descriptor.reuseIdentifier)
+        }
+
+        let cell = tableView.dequeueReusableCell(withIdentifier: descriptor.reuseIdentifier, for: indexPath)
+        descriptor.configure(cell)
         return cell
     }
 
